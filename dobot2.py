@@ -9,6 +9,8 @@ import threading
 import time
 import ctypes
 import serial
+import sys
+import paho.mqtt.publish as publish
 
 MODE_PTP_JUMP_XYZ = 0x00
 MODE_PTP_MOVJ_XYZ = 0x01
@@ -196,7 +198,11 @@ class Dobot2(threading.Thread):
             return -1
 
     def _extract_cmd_index(self, response):
-        return struct.unpack_from('I', response.params, 0)[0]
+        if response.params is not None:
+            try:
+                return struct.unpack_from('I', response.params, 0)[0]
+            except:
+                return None
 
     def wait_for_cmd(self, cmd_id):
         current_cmd_id = self._get_queued_cmd_current_index()
@@ -297,6 +303,7 @@ class Dobot2(threading.Thread):
         return self._send_command(msg)
 
     def go(self, x, y, z, r=0., mode=MODE_PTP_MOVJ_XYZ):
+        publish.single("/dobot/position", "{\"x\": "+str(x)+", \"y\": "+str(y)+", \"z\":"+str(z)+" }", hostname="localhost")
         return self._extract_cmd_index(self._set_ptp_cmd(x, y, z, r, mode))
 
     def go_lin(self, x, y, z, r=0., mode=MODE_PTP_MOVL_XYZ):
@@ -306,6 +313,7 @@ class Dobot2(threading.Thread):
         return self._extract_cmd_index(self._set_arc_cmd(x, y, z, r, cir_x, cir_y, cir_z, cir_r))
 
     def suck(self, suck):
+        publish.single("/dobot/suck", str(suck), hostname="localhost")
         return self._extract_cmd_index(self._set_end_effector_suction_cup(suck))
     
     def set_home(self, x, y, z, r=0.):
@@ -395,6 +403,7 @@ class Dobot2(threading.Thread):
         msg.params.extend(bytearray([0x4e]))
         msg.params.extend(bytearray([0x00]))
         msg.params.extend(bytearray([0x00]))
+        publish.single("/dobot/conveyor", "run", hostname="localhost")
         return self._send_command(msg)
     def stopConveyor(self):
         msg = Message()
@@ -407,6 +416,7 @@ class Dobot2(threading.Thread):
         msg.params.extend(bytearray([0x4e]))
         msg.params.extend(bytearray([0x00]))
         msg.params.extend(bytearray([0x00]))
+        publish.single("/dobot/conveyor", "stop", hostname="localhost")
         return self._send_command(msg)
     def grip(self, grip):
         self._set_end_effector_gripper(grip)
@@ -424,7 +434,7 @@ time.sleep(0.5)
 #device.home();
 #time.sleep(10)
 
-device.speed(100)
+device.speed(float(sys.argv[1]))
 device.go(250.0, 0.0, 25.0)
 device.startConveyor()
 
